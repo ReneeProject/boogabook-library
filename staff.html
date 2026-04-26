@@ -4,114 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Library Staff Admin</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js">
-let staffScanner = null;
-let staffScannerRunning = false;
-let staffScanLocked = false;
-
-function playBeep(){
-  try{
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = 880;
-    gain.gain.value = 0.22;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
-  }catch(e){}
-}
-
-async function resetStaffScannerArea(){
-  try{
-    if(staffScanner && staffScannerRunning){
-      await staffScanner.stop();
-    }
-  }catch(e){}
-
-  try{
-    if(staffScanner){
-      await staffScanner.clear();
-    }
-  }catch(e){}
-
-  staffScanner = null;
-  staffScannerRunning = false;
-  staffScanLocked = false;
-  const reader = document.getElementById("reader");
-  if(reader) reader.innerHTML = "";
-}
-
-async function startScanner(){
-  try{
-    if(staffScannerRunning) return;
-
-    await resetStaffScannerArea();
-
-    if(!window.isSecureContext){
-      m("staffMsg","Camera scanning needs HTTPS. Open your GitHub Pages https:// link.",false);
-      return;
-    }
-
-    if(typeof Html5Qrcode === "undefined"){
-      m("staffMsg","Scanner library not loaded. Refresh page or check internet.",false);
-      return;
-    }
-
-    staffScanner = new Html5Qrcode("reader");
-
-    const cameras = await Html5Qrcode.getCameras();
-
-    if(!cameras || cameras.length === 0){
-      m("staffMsg","No camera found. Allow camera permission.",false);
-      return;
-    }
-
-    let cameraId = cameras[0].id;
-
-    const backCamera = cameras.find(function(cam){
-      return /back|rear|environment/i.test(cam.label || "");
-    });
-
-    if(backCamera) cameraId = backCamera.id;
-
-    staffScannerRunning = true;
-    m("staffMsg","Starting camera...",true);
-
-    await staffScanner.start(
-      cameraId,
-      {fps:10, qrbox:250},
-      async function(txt){
-        if(staffScanLocked) return;
-        staffScanLocked = true;
-
-        document.getElementById("barcode").value = txt;
-        playBeep();
-        m("staffMsg","Scanned: " + txt + ". Scanner closed.",true);
-
-        setTimeout(async function(){
-          await resetStaffScannerArea();
-        },300);
-      },
-      function(err){}
-    );
-
-    m("staffMsg","Scanner started. Point your camera at the barcode.",true);
-
-  }catch(e){
-    await resetStaffScannerArea();
-    m("staffMsg","Scanner did not start. Allow camera permission, close other camera apps, then try again.",false);
-  }
-}
-
-async function stopScanner(){
-  await resetStaffScannerArea();
-  m("staffMsg","Scanner stopped.",true);
-}
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
 body{font-family:Arial,sans-serif;background:#f5f7fb;margin:0}
 .container{max-width:760px;margin:auto;padding:15px}
@@ -134,7 +27,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 .ok{background:#e8f5e9;color:#2e7d32}
 .bad{background:#ffebee;color:#c62828}
 .notice{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;padding:10px;border-radius:8px;margin-top:8px;line-height:1.4}
-#reader{margin-top:10px;border-radius:10px;overflow:hidden}
+#reader{margin-top:10px;border-radius:10px;overflow:hidden;width:100%;min-height:0}
 
 .splash {
   position: fixed;
@@ -228,7 +121,6 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 <button class="secondary" onclick="startScanner()">📷 Start Camera Scanner</button>
 <button class="grey" onclick="stopScanner()">Stop Scanner</button>
 <div id="reader"></div>
-
 <input id="bookTitle" class="adminOnly hidden" placeholder="Book Title">
 <input id="customer" placeholder="Customer / Member Name">
 <input id="customerPhone" placeholder="Handphone Number">
@@ -383,35 +275,6 @@ async function returnBook(){
  loadBooks();
 }
 
-
-function autoSetExpiry(){
- const start = document.getElementById("memStart").value;
- if(!start) return;
-
- const d = new Date(start + "T00:00:00");
- d.setFullYear(d.getFullYear() + 1);
- d.setDate(d.getDate() - 1);
-
- const yyyy = d.getFullYear();
- const mm = String(d.getMonth() + 1).padStart(2, "0");
- const dd = String(d.getDate()).padStart(2, "0");
-
- document.getElementById("memExpiry").value = yyyy + "-" + mm + "-" + dd;
-}
-
-function setTodayMembershipStart(){
- const input = document.getElementById("memStart");
- if(!input || input.value) return;
-
- const today = new Date();
- const yyyy = today.getFullYear();
- const mm = String(today.getMonth() + 1).padStart(2, "0");
- const dd = String(today.getDate()).padStart(2, "0");
-
- input.value = yyyy + "-" + mm + "-" + dd;
- autoSetExpiry();
-}
-
 async function addMember(){
  const d=await post({action:'ADD_MEMBER',adminUsername:currentStaff,adminPassword:currentPass,name:memName.value.trim(),phone:memPhone.value.trim(),startDate:memStart.value,expiryDate:memExpiry.value});
  m('memberMsg',d.message,d.success);
@@ -499,6 +362,138 @@ async function loadBooks(){
 
  booksBody.innerHTML=html||'<tr><td colspan="7">No books</td></tr>';
  overdueBody.innerHTML=overdueHtml||'<tr><td colspan="6">No overdue books</td></tr>';
+}
+
+
+function autoSetExpiry(){
+ const start = document.getElementById("memStart").value;
+ if(!start) return;
+
+ const d = new Date(start + "T00:00:00");
+ d.setFullYear(d.getFullYear() + 1);
+ d.setDate(d.getDate() - 1);
+
+ const yyyy = d.getFullYear();
+ const mm = String(d.getMonth() + 1).padStart(2, "0");
+ const dd = String(d.getDate()).padStart(2, "0");
+ document.getElementById("memExpiry").value = yyyy + "-" + mm + "-" + dd;
+}
+
+function setTodayMembershipStart(){
+ const input = document.getElementById("memStart");
+ if(!input || input.value) return;
+
+ const today = new Date();
+ const yyyy = today.getFullYear();
+ const mm = String(today.getMonth() + 1).padStart(2, "0");
+ const dd = String(today.getDate()).padStart(2, "0");
+
+ input.value = yyyy + "-" + mm + "-" + dd;
+ autoSetExpiry();
+}
+
+let staffScanner = null;
+let staffScannerRunning = false;
+let staffScanLocked = false;
+
+function playBeep(){
+  try{
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.value = 0.22;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  }catch(e){}
+}
+
+async function resetStaffScannerArea(){
+  try{
+    if(staffScanner && staffScannerRunning){
+      await staffScanner.stop();
+    }
+  }catch(e){}
+
+  try{
+    if(staffScanner){
+      await staffScanner.clear();
+    }
+  }catch(e){}
+
+  staffScanner = null;
+  staffScannerRunning = false;
+  staffScanLocked = false;
+  const reader = document.getElementById("reader");
+  if(reader) reader.innerHTML = "";
+}
+
+async function startScanner(){
+  try{
+    if(staffScannerRunning) return;
+
+    await resetStaffScannerArea();
+
+    if(!window.isSecureContext){
+      m("staffMsg","Camera scanning needs HTTPS. Open your GitHub Pages https:// link.",false);
+      return;
+    }
+
+    if(typeof Html5Qrcode === "undefined"){
+      m("staffMsg","Scanner library not loaded. Refresh page or check internet.",false);
+      return;
+    }
+
+    staffScanner = new Html5Qrcode("reader");
+
+    const cameras = await Html5Qrcode.getCameras();
+
+    if(!cameras || cameras.length === 0){
+      m("staffMsg","No camera found. Allow camera permission.",false);
+      return;
+    }
+
+    let cameraId = cameras[0].id;
+    const backCamera = cameras.find(function(cam){
+      return /back|rear|environment/i.test(cam.label || "");
+    });
+    if(backCamera) cameraId = backCamera.id;
+
+    staffScannerRunning = true;
+    m("staffMsg","Starting camera...",true);
+
+    await staffScanner.start(
+      cameraId,
+      {fps:10, qrbox:250},
+      async function(txt){
+        if(staffScanLocked) return;
+        staffScanLocked = true;
+
+        document.getElementById("barcode").value = txt;
+        playBeep();
+        m("staffMsg","Scanned: " + txt + ". Scanner closed.",true);
+
+        setTimeout(async function(){
+          await resetStaffScannerArea();
+        },300);
+      },
+      function(err){}
+    );
+
+    m("staffMsg","Scanner started. Point your camera at the barcode.",true);
+
+  }catch(e){
+    await resetStaffScannerArea();
+    m("staffMsg","Scanner did not start. Allow camera permission, close other camera apps, then try again.",false);
+  }
+}
+
+async function stopScanner(){
+  await resetStaffScannerArea();
+  m("staffMsg","Scanner stopped.",true);
 }
 
 </script>
