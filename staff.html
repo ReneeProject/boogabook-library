@@ -341,41 +341,113 @@ async function loadBooks(){
  let html='';
  let overdueHtml='';
 
+ const today = new Date();
+ today.setHours(0,0,0,0);
+
+ function parseSheetDate(v){
+   if(!v) return null;
+
+   if(v instanceof Date && !isNaN(v.getTime())) return v;
+
+   const s = String(v).trim();
+   if(!s) return null;
+
+   // dd/mm/yyyy or dd-mm-yyyy
+   let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+   if(m){
+     return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
+   }
+
+   // yyyy-mm-dd
+   m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+   if(m){
+     return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+   }
+
+   const d = new Date(s);
+   if(!isNaN(d.getTime())) return d;
+
+   return null;
+ }
+
+ function isToday(v){
+   const d = parseSheetDate(v);
+   if(!d) return false;
+   d.setHours(0,0,0,0);
+   return d.getTime() === today.getTime();
+ }
+
  (d.books||[]).forEach(b=>{
    const status=String(b.Status||'').toUpperCase();
    const overdueDays=Number(b["Overdue Days"]||0);
    const borrower=b["Borrower Name"]||'';
    const hp=b.Phone||'';
    const title=b.Title||'';
+   const borrowDate=b["Borrow Date"]||'';
+   const borrowTime=b["Borrow Time"]||'';
+   const returnTime=b["Return Time"]||'';
 
    // ONLY CHANGE:
-   // Book Status table now shows only books with activity.
-   // It hides normal available books that are IN and have no borrower/phone.
-   const hasActivity =
-     status === 'OUT' ||
-     overdueDays > 0 ||
-     String(borrower).trim() !== '' ||
-     String(hp).trim() !== '';
+   // Book Status now shows:
+   // 1) Active borrowed books: Status = OUT
+   // 2) Books returned today: Return Time is today
+   const isActiveBorrowed = status === 'OUT';
+   const isReturnedToday = status === 'IN' && isToday(returnTime);
 
-   if(!hasActivity) return;
+   if(!isActiveBorrowed && !isReturnedToday) return;
 
    const rowClass=overdueDays>0?' class="overdue-row"':'';
 
    let overdueText='';
-   if(status==='OUT' && overdueDays>0) overdueText='<span class="overdue-text">'+overdueDays+' day(s) overdue</span>';
-   else if(status==='OUT') overdueText='<span class="due-today">Due today</span>';
-   else overdueText='Returned / Available';
+   if(isActiveBorrowed && overdueDays>0) overdueText='<span class="overdue-text">'+overdueDays+' day(s) overdue</span>';
+   else if(isActiveBorrowed) overdueText='<span class="due-today">Due today</span>';
+   else if(isReturnedToday) overdueText='Returned today';
 
-   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b["Borrow Date"]||'')+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+   let displayBorrowDate = borrowDate;
+   if(!displayBorrowDate && borrowTime) displayBorrowDate = borrowTime;
 
-   if(status==='OUT' && overdueDays>0){
+   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+displayBorrowDate+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+
+   if(isActiveBorrowed && overdueDays>0){
      overdueHtml+='<tr class="overdue-row"><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td><span class="overdue-text">'+overdueDays+' day(s)</span></td><td>'+makeContactButtons(hp, borrower, title)+'</td></tr>';
    }
  });
 
- booksBody.innerHTML=html||'<tr><td colspan="7">No active borrowing records</td></tr>';
+ booksBody.innerHTML=html||'<tr><td colspan="7">No active borrowed books or books returned today</td></tr>';
  overdueBody.innerHTML=overdueHtml||'<tr><td colspan="6">No overdue books</td></tr>';
 }
+
+
+function autoSetExpiry(){
+ const start = document.getElementById("memStart").value;
+ if(!start) return;
+
+ const d = new Date(start + "T00:00:00");
+ d.setFullYear(d.getFullYear() + 1);
+ d.setDate(d.getDate() - 1);
+
+ const yyyy = d.getFullYear();
+ const mm = String(d.getMonth() + 1).padStart(2, "0");
+ const dd = String(d.getDate()).padStart(2, "0");
+ document.getElementById("memExpiry").value = yyyy + "-" + mm + "-" + dd;
+}
+
+function setTodayMembershipStart(){
+ const input = document.getElementById("memStart");
+ if(!input || input.value) return;
+
+ const today = new Date();
+ const yyyy = today.getFullYear();
+ const mm = String(today.getMonth() + 1).padStart(2, "0");
+ const dd = String(today.getDate()).padStart(2, "0");
+
+ input.value = yyyy + "-" + mm + "-" + dd;
+ autoSetExpiry();
+}
+
+let staffScanner = null;
+let staffScannerRunning = false;
+let staffScanLocked = false;
 
 function playBeep(){
   try{
