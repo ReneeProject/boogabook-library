@@ -184,7 +184,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 
 <div class="card">
 <h2>📊 Book Status</h2>
-<p class="small">Only books with borrowing activity are shown here. Normal available books with no activity are hidden.</p>
+<p class="small">HP number and overdue days are shown so staff can contact borrowers who have not returned books.</p>
 <div class="table-wrap">
 <table class="table">
 <thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Date</th><th>Status</th><th>Overdue</th></tr></thead>
@@ -347,20 +347,15 @@ async function loadBooks(){
    const borrower=b["Borrower Name"]||'';
    const hp=b.Phone||'';
    const title=b.Title||'';
-   const borrowDate=b["Borrow Date"]||'';
-   const borrowTime=b["Borrow Time"]||'';
-   const returnTime=b["Return Time"]||'';
 
-   // Show only books with activity.
-   // Hide normal IN books with no borrower / no borrow time / no return time.
+   // ONLY CHANGE:
+   // Book Status table now shows only books with activity.
+   // It hides normal available books that are IN and have no borrower/phone.
    const hasActivity =
      status === 'OUT' ||
      overdueDays > 0 ||
      String(borrower).trim() !== '' ||
-     String(hp).trim() !== '' ||
-     String(borrowDate).trim() !== '' ||
-     String(borrowTime).trim() !== '' ||
-     String(returnTime).trim() !== '';
+     String(hp).trim() !== '';
 
    if(!hasActivity) return;
 
@@ -371,7 +366,7 @@ async function loadBooks(){
    else if(status==='OUT') overdueText='<span class="due-today">Due today</span>';
    else overdueText='Returned / Available';
 
-   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+borrowDate+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b["Borrow Date"]||'')+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
 
    if(status==='OUT' && overdueDays>0){
      overdueHtml+='<tr class="overdue-row"><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td><span class="overdue-text">'+overdueDays+' day(s)</span></td><td>'+makeContactButtons(hp, borrower, title)+'</td></tr>';
