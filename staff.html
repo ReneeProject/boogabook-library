@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BoogaBook Staff</title>
+<title>Library Staff Admin</title>
 
+<!-- ✅ Use stable scanner CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
 <style>
@@ -26,7 +27,12 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 .msg{padding:10px;border-radius:8px;margin-top:8px}
 .ok{background:#e8f5e9;color:#2e7d32}
 .bad{background:#ffebee;color:#c62828}
-#reader{margin-top:10px;border-radius:10px;overflow:hidden}
+
+#reader{
+  margin-top:10px;
+  border-radius:12px;
+  overflow:hidden;
+}
 </style>
 </head>
 
@@ -42,50 +48,53 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 <div id="loginMsg"></div>
 </div>
 
-<!-- MAIN STAFF PAGE -->
-<div id="staffPage" class="card hidden">
+<!-- STAFF PAGE -->
+<div id="staffPage" class="hidden">
 
+<div class="card">
 <h2>📚 Book Management</h2>
 
 <input id="barcode" placeholder="Scan / Enter Barcode">
 
-<button class="secondary" onclick="startScanner()">📷 Start Camera Scanner</button>
+<button class="secondary" onclick="startScanner()">📷 Start Scanner</button>
 <button class="grey" onclick="stopScanner()">Stop Scanner</button>
 
-<!-- ✅ SCANNER MOVED HERE -->
+<!-- ✅ SCANNER POSITION FIXED -->
 <div id="reader"></div>
 
 <input id="bookTitle" placeholder="Book Title">
-<input id="customer" placeholder="Customer Name">
-<input id="customerPhone" placeholder="Phone">
+<input id="customer" placeholder="Customer / Member Name">
+<input id="customerPhone" placeholder="Handphone Number">
 
-<button onclick="loanBook()">Loan</button>
-<button class="secondary" onclick="returnBook()">Return</button>
+<button onclick="loanBook()">Loan Book</button>
+<button class="secondary" onclick="returnBook()">Return Book</button>
 
 <div id="staffMsg"></div>
 
 <button onclick="logout()">Logout</button>
+</div>
 
 </div>
 
 </div>
 
 <script>
-let scanner=null;
-let running=false;
-let locked=false;
+let scanner = null;
+let scannerRunning = false;
+let scanLocked = false;
 
 function m(id,text,ok=true){
- document.getElementById(id).innerHTML='<div class="'+(ok?'msg ok':'msg bad')+'">'+text+'</div>';
+ document.getElementById(id).innerHTML =
+ '<div class="'+(ok?'msg ok':'msg bad')+'">'+text+'</div>';
 }
 
-function beep(){
+function playBeep(){
  try{
-  let ctx=new (window.AudioContext||window.webkitAudioContext)();
-  let osc=ctx.createOscillator();
-  let gain=ctx.createGain();
-  osc.frequency.value=880;
-  gain.gain.value=0.2;
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.frequency.value = 880;
+  gain.gain.value = 0.2;
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
@@ -93,66 +102,67 @@ function beep(){
  }catch(e){}
 }
 
-async function reset(){
- try{if(scanner&&running)await scanner.stop();}catch(e){}
- try{if(scanner)await scanner.clear();}catch(e){}
- scanner=null;
- running=false;
- locked=false;
- reader.innerHTML="";
+async function resetScanner(){
+ try{ if(scanner && scannerRunning) await scanner.stop(); }catch(e){}
+ try{ if(scanner) await scanner.clear(); }catch(e){}
+ scanner = null;
+ scannerRunning = false;
+ scanLocked = false;
+ document.getElementById("reader").innerHTML="";
 }
 
 async function startScanner(){
  try{
-  if(running)return;
+  if(scannerRunning) return;
 
-  await reset();
+  await resetScanner();
 
   if(!window.isSecureContext){
-   m("staffMsg","Use GitHub https link",false);
-   return;
+    m("staffMsg","Use GitHub HTTPS link to enable camera",false);
+    return;
   }
 
-  scanner=new Html5Qrcode("reader");
+  scanner = new Html5Qrcode("reader");
 
-  let cams=await Html5Qrcode.getCameras();
+  const cams = await Html5Qrcode.getCameras();
   if(!cams.length){
-   m("staffMsg","No camera",false);
-   return;
+    m("staffMsg","No camera found",false);
+    return;
   }
 
-  let cam=cams.find(c=>/back|rear/i.test(c.label))||cams[0];
+  let cam = cams.find(c=>/back|rear/i.test(c.label)) || cams[0];
 
-  running=true;
-  m("staffMsg","Starting camera");
+  scannerRunning = true;
+  m("staffMsg","Starting camera...",true);
 
   await scanner.start(
-   cam.id,
-   {fps:10,qrbox:250},
-   async(txt)=>{
-    if(locked)return;
-    locked=true;
+    cam.id,
+    {fps:10, qrbox:250},
+    async(txt)=>{
+      if(scanLocked) return;
 
-    barcode.value=txt;
-    beep();
-    m("staffMsg","Scanned: "+txt);
+      scanLocked = true;
+      document.getElementById("barcode").value = txt;
 
-    setTimeout(reset,300);
-   }
+      playBeep();
+      m("staffMsg","Scanned: "+txt,true);
+
+      setTimeout(resetScanner,300);
+    }
   );
 
  }catch(e){
-  await reset();
-  m("staffMsg","Camera blocked",false);
+  await resetScanner();
+  m("staffMsg","Camera blocked. Allow permission.",false);
  }
 }
 
 async function stopScanner(){
- await reset();
- m("staffMsg","Stopped");
+ await resetScanner();
+ m("staffMsg","Scanner stopped",true);
 }
 
-/* dummy logic - keep your original backend calls */
+/* KEEP YOUR ORIGINAL LOGIC BELOW */
 function login(){
  loginPage.classList.add("hidden");
  staffPage.classList.remove("hidden");
@@ -163,8 +173,9 @@ function logout(){
  loginPage.classList.remove("hidden");
 }
 
-function loanBook(){m("staffMsg","Loan recorded");}
-function returnBook(){m("staffMsg","Return recorded");}
+function loanBook(){ m("staffMsg","Loan recorded",true); }
+function returnBook(){ m("staffMsg","Return recorded",true); }
+
 </script>
 
 </body>
