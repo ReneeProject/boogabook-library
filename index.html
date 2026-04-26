@@ -397,6 +397,27 @@ async function load() {
   }
 }
 
+
+function playBeep() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.15);
+  } catch (e) {}
+}
+
+
 async function startScanner() {
   try {
     if (scannerRunning) return;
@@ -429,9 +450,18 @@ async function startScanner() {
     await scanner.start(
       cameraId,
       { fps: 10, qrbox: 250 },
-      function(txt) {
+      async function(txt) {
         document.getElementById("barcode").value = txt;
-        showBox("msg", "Scanned: " + txt, true);
+        playBeep();
+        showBox("msg", "Scanned: " + txt + ". Scanner closed.", true);
+
+        try {
+          if (scanner && scannerRunning) {
+            await scanner.stop();
+            await scanner.clear();
+            scannerRunning = false;
+          }
+        } catch (e) {}
       },
       function(err) {}
     );
