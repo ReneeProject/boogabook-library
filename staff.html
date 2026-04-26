@@ -139,6 +139,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 
 <div id="memberManage" class="card hidden">
 <h2>👤 Membership Management</h2>
+<input id="memberSearch" placeholder="Search member name / HP number" oninput="filterMembers()">
 <p class="small">Only active members can borrow books. Members can borrow up to 2 books at a time.</p>
 <input id="memName" placeholder="Member Name">
 <input id="memPhone" placeholder="Handphone Number">
@@ -154,6 +155,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 <tbody id="membersBody"></tbody>
 </table>
 </div>
+<button id="loadMoreMembersBtn" class="secondary" onclick="loadMoreMembers()">Load More Members</button>
 <div id="memberMsg"></div>
 </div>
 
@@ -292,13 +294,161 @@ async function deleteMember(phone){
 async function loadMembers(){
  const r=await fetch(API_URL+'?mode=members&adminUsername='+encodeURIComponent(currentStaff)+'&adminPassword='+encodeURIComponent(currentPass));
  const d=await r.json();
- if(!d.success){membersBody.innerHTML='<tr><td colspan="6">Unable to load members</td></tr>';return;}
- let html='';
- (d.members||[]).forEach(x=>{
-   html+='<tr><td>'+x.name+'</td><td>'+x.phone+'</td><td>'+x.start+'</td><td>'+x.expiry+'</td><td>'+x.status+'</td><td><button class="danger" onclick="deleteMember(\''+x.phone+'\')">Delete</button></td></tr>';
- });
- membersBody.innerHTML=html||'<tr><td colspan="6">No members</td></tr>';
+
+ if(!d.success){
+   membersBody.innerHTML='<tr><td colspan="6">Unable to load members</td></tr>';
+   return;
+ }
+
+ allMembersList = d.members || [];
+ memberDisplayLimit = 5;
+
+ await markMemberActivity();
+ renderMembers();
 }
+
+async function markMemberActivity(){
+ try{
+   const r=await fetch(API_URL+'?mode=books');
+   const d=await r.json();
+
+   const today = new Date();
+   today.setHours(0,0,0,0);
+
+   function cleanPhone(v){
+     return String(v || '').replace(/\D/g,'');
+   }
+
+   function cleanName(v){
+     return String(v || '').trim().replace(/\s+/g,' ').toLowerCase();
+   }
+
+   function parseSheetDate(v){
+     if(!v) return null;
+
+     const s = String(v).trim();
+     if(!s) return null;
+
+     let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+     if(m) return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
+
+     m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+     if(m) return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+
+     const dt = new Date(s);
+     if(!isNaN(dt.getTime())) return dt;
+
+     return null;
+   }
+
+   function isToday(v){
+     const dt = parseSheetDate(v);
+     if(!dt) return false;
+     dt.setHours(0,0,0,0);
+     return dt.getTime() === today.getTime();
+   }
+
+   const activityMap = {};
+
+   (d.books || []).forEach(b=>{
+     const status = String(b.Status || '').toUpperCase();
+     const borrower = b["Borrower Name"] || '';
+     const hp = b.Phone || '';
+     const returnTime = b["Return Time"] || '';
+
+     const activeBorrow = status === 'OUT';
+     const returnedToday = status === 'IN' && isToday(returnTime);
+
+     if(!activeBorrow && !returnedToday) return;
+
+     const key = cleanName(borrower) + '|' + cleanPhone(hp);
+     if(!key || key === '|') return;
+
+     if(!activityMap[key]){
+       activityMap[key] = {activeBorrowCount:0, returnedTodayCount:0, activityScore:0};
+     }
+
+     if(activeBorrow){
+       activityMap[key].activeBorrowCount++;
+       activityMap[key].activityScore += 10;
+     }
+
+     if(returnedToday){
+       activityMap[key].returnedTodayCount++;
+       activityMap[key].activityScore += 5;
+     }
+   });
+
+   allMembersList = allMembersList.map(m=>{
+     const key = cleanName(m.name) + '|' + cleanPhone(m.phone);
+     const a = activityMap[key] || {activeBorrowCount:0, returnedTodayCount:0, activityScore:0};
+     return {
+       ...m,
+       activeBorrowCount: a.activeBorrowCount,
+       returnedTodayCount: a.returnedTodayCount,
+       activityScore: a.activityScore,
+       hasActivity: a.activityScore > 0
+     };
+   });
+
+   // Show active users with activity first, then other active members, then expired members.
+   allMembersList.sort((a,b)=>{
+     const aActiveStatus = String(a.status || '').toUpperCase() === 'ACTIVE' ? 1 : 0;
+     const bActiveStatus = String(b.status || '').toUpperCase() === 'ACTIVE' ? 1 : 0;
+
+     if((b.hasActivity?1:0) !== (a.hasActivity?1:0)) return (b.hasActivity?1:0) - (a.hasActivity?1:0);
+     if(b.activityScore !== a.activityScore) return b.activityScore - a.activityScore;
+     if(bActiveStatus !== aActiveStatus) return bActiveStatus - aActiveStatus;
+
+     return String(a.name || '').localeCompare(String(b.name || ''));
+   });
+
+ }catch(e){
+   // If book activity cannot load, keep normal member list.
+ }
+}
+
+function renderMembers(){
+ let html='';
+
+ const searchInput = document.getElementById("memberSearch");
+ const search = searchInput ? searchInput.value.toLowerCase().trim() : "";
+
+ const filtered = allMembersList.filter(x=>{
+   const name = String(x.name || "").toLowerCase();
+   const phone = String(x.phone || "").toLowerCase();
+   return name.includes(search) || phone.includes(search);
+ });
+
+ const displayList = filtered.slice(0, memberDisplayLimit);
+
+ displayList.forEach(x=>{
+   let activityText = '';
+   if(x.activeBorrowCount > 0) activityText += ' 📚 OUT: ' + x.activeBorrowCount;
+   if(x.returnedTodayCount > 0) activityText += ' ✅ Returned Today: ' + x.returnedTodayCount;
+
+   html+='<tr><td>'+x.name+'<br><span class="small">'+activityText+'</span></td><td>'+x.phone+'</td><td>'+x.start+'</td><td>'+x.expiry+'</td><td>'+x.status+'</td><td><button class="danger" onclick="deleteMember(\''+x.phone+'\')">Delete</button></td></tr>';
+ });
+
+ membersBody.innerHTML=html||'<tr><td colspan="6">No members found</td></tr>';
+
+ const btn = document.getElementById("loadMoreMembersBtn");
+ if(btn){
+   btn.style.display = filtered.length > memberDisplayLimit ? "block" : "none";
+   btn.innerText = "Load More Members (" + Math.min(memberDisplayLimit, filtered.length) + " / " + filtered.length + ")";
+ }
+}
+
+function loadMoreMembers(){
+ memberDisplayLimit += 5;
+ renderMembers();
+}
+
+function filterMembers(){
+ memberDisplayLimit = 5;
+ renderMembers();
+}
+
 
 async function addStaff(){
  const d=await post({action:'ADD_STAFF',adminUsername:currentStaff,adminPassword:currentPass,newUsername:newStaffUser.value.trim(),newPassword:newStaffPass.value.trim()});
