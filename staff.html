@@ -184,7 +184,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 
 <div class="card">
 <h2>📊 Book Status</h2>
-<p class="small">HP number and overdue days are shown so staff can contact borrowers who have not returned books.</p>
+<p class="small">Only books with borrowing activity are shown here. Normal available books with no activity are hidden.</p>
 <div class="table-wrap">
 <table class="table">
 <thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Date</th><th>Status</th><th>Overdue</th></tr></thead>
@@ -347,54 +347,40 @@ async function loadBooks(){
    const borrower=b["Borrower Name"]||'';
    const hp=b.Phone||'';
    const title=b.Title||'';
+   const borrowDate=b["Borrow Date"]||'';
+   const borrowTime=b["Borrow Time"]||'';
+   const returnTime=b["Return Time"]||'';
+
+   // Show only books with activity.
+   // Hide normal IN books with no borrower / no borrow time / no return time.
+   const hasActivity =
+     status === 'OUT' ||
+     overdueDays > 0 ||
+     String(borrower).trim() !== '' ||
+     String(hp).trim() !== '' ||
+     String(borrowDate).trim() !== '' ||
+     String(borrowTime).trim() !== '' ||
+     String(returnTime).trim() !== '';
+
+   if(!hasActivity) return;
+
    const rowClass=overdueDays>0?' class="overdue-row"':'';
 
    let overdueText='';
    if(status==='OUT' && overdueDays>0) overdueText='<span class="overdue-text">'+overdueDays+' day(s) overdue</span>';
    else if(status==='OUT') overdueText='<span class="due-today">Due today</span>';
+   else overdueText='Returned / Available';
 
-   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b["Borrow Date"]||'')+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+borrowDate+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
 
    if(status==='OUT' && overdueDays>0){
      overdueHtml+='<tr class="overdue-row"><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td><span class="overdue-text">'+overdueDays+' day(s)</span></td><td>'+makeContactButtons(hp, borrower, title)+'</td></tr>';
    }
  });
 
- booksBody.innerHTML=html||'<tr><td colspan="7">No books</td></tr>';
+ booksBody.innerHTML=html||'<tr><td colspan="7">No active borrowing records</td></tr>';
  overdueBody.innerHTML=overdueHtml||'<tr><td colspan="6">No overdue books</td></tr>';
 }
-
-
-function autoSetExpiry(){
- const start = document.getElementById("memStart").value;
- if(!start) return;
-
- const d = new Date(start + "T00:00:00");
- d.setFullYear(d.getFullYear() + 1);
- d.setDate(d.getDate() - 1);
-
- const yyyy = d.getFullYear();
- const mm = String(d.getMonth() + 1).padStart(2, "0");
- const dd = String(d.getDate()).padStart(2, "0");
- document.getElementById("memExpiry").value = yyyy + "-" + mm + "-" + dd;
-}
-
-function setTodayMembershipStart(){
- const input = document.getElementById("memStart");
- if(!input || input.value) return;
-
- const today = new Date();
- const yyyy = today.getFullYear();
- const mm = String(today.getMonth() + 1).padStart(2, "0");
- const dd = String(today.getDate()).padStart(2, "0");
-
- input.value = yyyy + "-" + mm + "-" + dd;
- autoSetExpiry();
-}
-
-let staffScanner = null;
-let staffScannerRunning = false;
-let staffScanLocked = false;
 
 function playBeep(){
   try{
