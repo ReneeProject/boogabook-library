@@ -139,7 +139,9 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 
 <div id="memberManage" class="card hidden">
 <h2>👤 Membership Management</h2>
-<input id="memberSearch" placeholder="Search member name / HP number" oninput="filterMembers()">
+<input id="memberSearch" placeholder="Search member name / HP number" onkeydown="if(event.key==='Enter'){filterMembers()}">
+<button id="memberSearchBtn" class="secondary" onclick="filterMembers()">Search Members</button>
+<button class="grey" onclick="clearMemberSearch()">Clear Search</button>
 <p class="small">Only active members can borrow books. Members can borrow up to 2 books at a time.</p>
 <input id="memName" placeholder="Member Name">
 <input id="memPhone" placeholder="Handphone Number">
@@ -451,6 +453,13 @@ function loadMoreMembers(){
 }
 
 function filterMembers(){
+ memberDisplayLimit = 5;
+ renderMembers();
+}
+
+function clearMemberSearch(){
+ const searchInput = document.getElementById("memberSearch");
+ if(searchInput) searchInput.value = "";
  memberDisplayLimit = 5;
  renderMembers();
 }
