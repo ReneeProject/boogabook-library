@@ -198,6 +198,8 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 </div>
 
 <script>
+let allMembersList = [];
+let memberDisplayLimit = 5;
 const API_URL = "https://script.google.com/macros/s/AKfycbx1r8eOskw8-c0l1awSKuIfYYLaEh4oSK36_7PNlgEG4qHDxMRLpN0aEtvBjmZAZpH-Iw/exec";
 let currentStaff=null,currentPass=null,currentRole=null;
 
@@ -391,7 +393,11 @@ async function markMemberActivity(){
      };
    });
 
-   // Show active users with activity first, then other active members, then expired members.
+   // Sorting only:
+   // 1) Active members with activity
+   // 2) Active members without activity
+   // 3) Expired members
+   // Load More still includes all members.
    allMembersList.sort((a,b)=>{
      const aActiveStatus = String(a.status || '').toUpperCase() === 'ACTIVE' ? 1 : 0;
      const bActiveStatus = String(b.status || '').toUpperCase() === 'ACTIVE' ? 1 : 0;
@@ -404,7 +410,7 @@ async function markMemberActivity(){
    });
 
  }catch(e){
-   // If book activity cannot load, keep normal member list.
+   // If book activity cannot load, keep member list and still show/search/load more.
  }
 }
 
