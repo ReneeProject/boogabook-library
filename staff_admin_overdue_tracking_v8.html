@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Library Staff Admin</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f7fb;margin:0}
+.container{max-width:760px;margin:auto;padding:15px}
+.card{background:#fff;padding:15px;border-radius:12px;margin-bottom:15px;box-shadow:0 4px 10px rgba(0,0,0,.08)}
+input,button{width:100%;box-sizing:border-box;padding:10px;margin:5px 0;border-radius:8px;font-size:15px}
+input{border:1px solid #ccc}
+button{border:none;background:#4CAF50;color:white;cursor:pointer}
+.secondary{background:#2196F3}
+.danger{background:#f44336}
+.orange{background:#ff9800}
+.grey{background:#607d8b}
+.hidden{display:none!important}
+.small{font-size:12px;color:#666}
+.table-wrap{overflow-x:auto}
+.table{width:100%;border-collapse:collapse;margin-top:10px}
+.table th,.table td{border-bottom:1px solid #ddd;padding:8px;text-align:left;font-size:14px;vertical-align:top;white-space:nowrap}
+.status-out{color:red;font-weight:bold}
+.status-in{color:green;font-weight:bold}.overdue-row{background:#fff1f2}.overdue-text{color:#dc2626;font-weight:bold}.due-today{color:#f97316;font-weight:bold}
+.msg{padding:10px;border-radius:8px;margin-top:8px}
+.ok{background:#e8f5e9;color:#2e7d32}
+.bad{background:#ffebee;color:#c62828}
+.notice{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;padding:10px;border-radius:8px;margin-top:8px;line-height:1.4}
+#reader{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div id="loginPage" class="card">
+<h2>🔐 Staff Login</h2>
+<input id="loginUser" placeholder="Username">
+<input id="loginPass" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<div id="loginMsg"></div>
+</div>
+
+<div id="staffPage" class="card hidden">
+<h2>📚 Book Management</h2>
+<p class="small">Logged in as: <b id="staffLabel"></b></p>
+
+<div id="staffOnlyNotice" class="notice hidden">
+  Staff access: You can loan and return books only. Add/Delete inventory is restricted to Admin.
+</div>
+
+<input id="barcode" placeholder="Scan / Enter Barcode">
+<input id="bookTitle" class="adminOnly hidden" placeholder="Book Title">
+<input id="customer" placeholder="Customer / Member Name">
+<input id="customerPhone" placeholder="Handphone Number">
+
+<button onclick="loanBook()">Loan Book</button>
+<button class="secondary" onclick="returnBook()">Return Book</button>
+
+<button id="addBookBtn" class="orange adminOnly hidden" onclick="addBook()">➕ Add Inventory</button>
+<button id="deleteBookBtn" class="danger adminOnly hidden" onclick="deleteBook()">🗑 Delete Book</button>
+
+<button class="grey" onclick="loadBooks()">Refresh Books</button>
+<div id="reader"></div>
+<div id="staffMsg"></div>
+<button onclick="logout()">Logout</button>
+</div>
+
+<div id="memberManage" class="card hidden">
+<h2>👤 Membership Management</h2>
+<p class="small">Only active members can borrow books. Members can borrow up to 2 books at a time.</p>
+<input id="memName" placeholder="Member Name">
+<input id="memPhone" placeholder="Handphone Number">
+<input id="memStart" type="date" placeholder="Membership Start">
+<input id="memExpiry" type="date" placeholder="Expiry Date">
+<button onclick="addMember()">Add / Update Member</button>
+<button class="grey" onclick="loadMembers()">Refresh Members</button>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>Name</th><th>Phone</th><th>Start</th><th>Expiry</th><th>Status</th><th>Action</th></tr></thead>
+<tbody id="membersBody"></tbody>
+</table>
+</div>
+<div id="memberMsg"></div>
+</div>
+
+<div id="staffManage" class="card hidden">
+<h2>👥 Manage Staff</h2>
+<input id="newStaffUser" placeholder="New Staff Username">
+<input id="newStaffPass" type="password" placeholder="New Staff Password">
+<button onclick="addStaff()">Add Staff</button>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>User</th><th>Role</th><th>Action</th></tr></thead>
+<tbody id="staffBody"></tbody>
+</table>
+</div>
+<div id="staffManageMsg"></div>
+</div>
+
+<div class="card">
+<h2>📊 Book Status</h2>
+<p class="small">HP number and overdue days are shown so staff can contact borrowers who have not returned books.</p>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Date</th><th>Status</th><th>Overdue</th></tr></thead>
+<tbody id="booksBody"></tbody>
+</table>
+</div>
+</div>
+
+</div>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbx1r8eOskw8-c0l1awSKuIfYYLaEh4oSK36_7PNlgEG4qHDxMRLpN0aEtvBjmZAZpH-Iw/exec";
+let currentStaff=null,currentPass=null,currentRole=null;
+
+function m(id,text,ok=true){document.getElementById(id).innerHTML='<div class="msg '+(ok?'ok':'bad')+'">'+text+'</div>';}
+async function post(data){const r=await fetch(API_URL,{method:'POST',body:JSON.stringify(data)});return await r.json();}
+
+function setAdminView(isAdmin){
+  document.querySelectorAll('.adminOnly').forEach(el=>{
+    if(isAdmin) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  });
+
+  if(isAdmin){
+    memberManage.classList.remove('hidden');
+    staffManage.classList.remove('hidden');
+    staffOnlyNotice.classList.add('hidden');
+    loadMembers();
+    loadStaffList();
+  }else{
+    memberManage.classList.add('hidden');
+    staffManage.classList.add('hidden');
+    staffOnlyNotice.classList.remove('hidden');
+  }
+}
+
+async function login(){
+ const u=loginUser.value.trim(), p=loginPass.value.trim();
+ if(!u||!p){m('loginMsg','Enter username and password',false);return;}
+ const d=await post({action:'LOGIN_STAFF',username:u,password:p});
+ if(!d.success){m('loginMsg',d.message||'Wrong login',false);return;}
+ currentStaff=u;currentPass=p;currentRole=d.role||'';
+ staffLabel.innerText=u+' ('+currentRole+')';
+ loginPage.classList.add('hidden');
+ staffPage.classList.remove('hidden');
+ setAdminView(currentRole.toUpperCase()==='ADMIN');
+ loadBooks();
+}
+
+function logout(){
+ currentStaff=null;currentPass=null;currentRole=null;
+ loginPage.classList.remove('hidden');
+ staffPage.classList.add('hidden');
+ memberManage.classList.add('hidden');
+ staffManage.classList.add('hidden');
+ loginUser.value='';
+ loginPass.value='';
+}
+
+async function addBook(){
+ const d=await post({action:'ADD_BOOK',username:currentStaff,password:currentPass,barcode:barcode.value.trim(),title:bookTitle.value.trim()});
+ m('staffMsg',d.message,d.success);
+ if(d.success){barcode.value='';bookTitle.value='';}
+ loadBooks();
+}
+
+async function deleteBook(){
+ if(currentRole.toUpperCase()!=='ADMIN'){m('staffMsg','Only Admin can delete books.',false);return;}
+ if(!confirm('Delete book?'))return;
+ const d=await post({action:'DELETE_BOOK',username:currentStaff,password:currentPass,barcode:barcode.value.trim()});
+ m('staffMsg',d.message,d.success);
+ if(d.success) barcode.value='';
+ loadBooks();
+}
+
+async function loanBook(){
+ const d=await post({action:'BORROW',barcode:barcode.value.trim(),name:customer.value.trim(),phone:customerPhone.value.trim()});
+ m('staffMsg',d.message,d.success);
+ if(d.success){barcode.value='';customer.value='';customerPhone.value='';}
+ loadBooks();
+}
+
+async function returnBook(){
+ const d=await post({action:'RETURN',barcode:barcode.value.trim()});
+ m('staffMsg',d.message,d.success);
+ if(d.success) barcode.value='';
+ loadBooks();
+}
+
+async function addMember(){
+ const d=await post({action:'ADD_MEMBER',adminUsername:currentStaff,adminPassword:currentPass,name:memName.value.trim(),phone:memPhone.value.trim(),startDate:memStart.value,expiryDate:memExpiry.value});
+ m('memberMsg',d.message,d.success);
+ if(d.success){memName.value='';memPhone.value='';memStart.value='';memExpiry.value='';}
+ loadMembers();
+}
+
+async function deleteMember(phone){
+ if(!confirm('Delete member?'))return;
+ const d=await post({action:'DELETE_MEMBER',adminUsername:currentStaff,adminPassword:currentPass,phone:phone});
+ m('memberMsg',d.message,d.success);
+ loadMembers();
+}
+
+async function loadMembers(){
+ const r=await fetch(API_URL+'?mode=members&adminUsername='+encodeURIComponent(currentStaff)+'&adminPassword='+encodeURIComponent(currentPass));
+ const d=await r.json();
+ if(!d.success){membersBody.innerHTML='<tr><td colspan="6">Unable to load members</td></tr>';return;}
+ let html='';
+ (d.members||[]).forEach(x=>{
+   html+='<tr><td>'+x.name+'</td><td>'+x.phone+'</td><td>'+x.start+'</td><td>'+x.expiry+'</td><td>'+x.status+'</td><td><button class="danger" onclick="deleteMember(\''+x.phone+'\')">Delete</button></td></tr>';
+ });
+ membersBody.innerHTML=html||'<tr><td colspan="6">No members</td></tr>';
+}
+
+async function addStaff(){
+ const d=await post({action:'ADD_STAFF',adminUsername:currentStaff,adminPassword:currentPass,newUsername:newStaffUser.value.trim(),newPassword:newStaffPass.value.trim()});
+ m('staffManageMsg',d.message,d.success);
+ if(d.success){newStaffUser.value='';newStaffPass.value='';}
+ loadStaffList();
+}
+
+async function deleteStaff(u){
+ if(!confirm('Delete staff?'))return;
+ const d=await post({action:'DELETE_STAFF',adminUsername:currentStaff,adminPassword:currentPass,targetUsername:u});
+ m('staffManageMsg',d.message,d.success);
+ loadStaffList();
+}
+
+async function loadStaffList(){
+ const r=await fetch(API_URL+'?mode=stafflist&adminUsername='+encodeURIComponent(currentStaff)+'&adminPassword='+encodeURIComponent(currentPass));
+ const d=await r.json(); let html='';
+ (d.staff||[]).forEach(s=>{
+   html+='<tr><td>'+s.username+'</td><td>'+s.role+'</td><td>'+(s.username===currentStaff?'Current login':'<button class="danger" onclick="deleteStaff(\''+s.username+'\')">Delete</button>')+'</td></tr>';
+ });
+ staffBody.innerHTML=html||'<tr><td colspan="3">No staff</td></tr>';
+}
+
+async function loadBooks(){
+ const r=await fetch(API_URL+'?mode=books');
+ const d=await r.json();
+ let html='';
+ (d.books||[]).forEach(b=>{
+   const status=String(b.Status||'').toUpperCase();
+   const overdueDays=Number(b["Overdue Days"]||0);
+   const rowClass=overdueDays>0?' class="overdue-row"':'';
+   let overdueText='';
+   if(status==='OUT' && overdueDays>0) overdueText='<span class="overdue-text">'+overdueDays+' day(s) overdue</span>';
+   else if(status==='OUT') overdueText='<span class="due-today">Due today</span>';
+   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+(b.Title||'')+'</td><td>'+(b["Borrower Name"]||'')+'</td><td>'+(b.Phone||'')+'</td><td>'+(b["Borrow Date"]||'')+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+ });
+ booksBody.innerHTML=html||'<tr><td colspan="7">No books</td></tr>';
+}
+
+new Html5Qrcode("reader").start({facingMode:"environment"},{fps:10,qrbox:250},txt=>{barcode.value=txt;}).catch(err=>{});
+</script>
+</body>
+</html>

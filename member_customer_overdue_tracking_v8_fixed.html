@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Member Library Loan</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f7fb;margin:0}
+.container{max-width:520px;margin:auto;padding:15px}
+.card{background:#fff;padding:15px;border-radius:12px;margin-bottom:15px;box-shadow:0 4px 10px rgba(0,0,0,.08)}
+input,button{width:100%;box-sizing:border-box;padding:12px;margin:6px 0;border-radius:8px;font-size:16px}
+input{border:1px solid #ccc}
+button{border:none;background:#4CAF50;color:white;cursor:pointer}
+.secondary{background:#2196F3}
+.hidden{display:none}
+.notice{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;padding:12px;border-radius:10px;line-height:1.45;margin:10px 0}
+.error{background:#ffebee;color:#c62828;border:1px solid #ffcdd2;padding:12px;border-radius:10px;line-height:1.45;margin:10px 0}
+.success{background:#e8f5e9;color:#2e7d32;border:1px solid #c8e6c9;padding:12px;border-radius:10px;line-height:1.45;margin:10px 0}
+.small{font-size:12px;color:#666}
+.table{width:100%;border-collapse:collapse;margin-top:10px}
+.table th,.table td{border-bottom:1px solid #ddd;padding:8px;text-align:left;font-size:14px}
+.due-today{color:#f97316;font-weight:bold}
+.overdue{color:#dc2626;font-weight:bold}
+#reader{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="card">
+<h2>📚 Members Library</h2>
+<p class="small">For paid members only.</p>
+</div>
+
+<div class="card">
+<h3>📱 Member Details</h3>
+<input id="name" placeholder="Member Name">
+<input id="phone" placeholder="Handphone Number">
+<button onclick="startMember()">Start</button>
+<div id="startMsg"></div>
+</div>
+
+<div id="main" class="card hidden">
+<h3>📖 Borrow / Return</h3>
+<p>Welcome <b id="memberDisplay"></b></p>
+
+<div class="notice">
+  Library access is for active paid members only. Each member may borrow up to <b>2 books at a time</b>. Please take good care of the books and return all borrowed books before leaving the centre. Books not returned on the same day will be marked overdue and may be subject to a penalty fee.
+</div>
+
+<div id="warningBox" class="error hidden"></div>
+
+<input id="barcode" placeholder="Scan Book Barcode">
+<button onclick="borrow()">Borrow</button>
+<button class="secondary" onclick="returnBook()">Return</button>
+
+<div id="reader"></div>
+<div id="msg"></div>
+</div>
+
+<div id="listCard" class="card hidden">
+<h3>🧾 My Borrowed Books</h3>
+<table class="table">
+<thead>
+<tr>
+<th>Book</th>
+<th>Title</th>
+<th>Reminder</th>
+</tr>
+</thead>
+<tbody id="list"></tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbx1r8eOskw8-c0l1awSKuIfYYLaEh4oSK36_7PNlgEG4qHDxMRLpN0aEtvBjmZAZpH-Iw/exec";
+let user = null;
+
+function box(id, text, type){
+  const cls = type === "ok" ? "success" : type === "warn" ? "notice" : "error";
+  document.getElementById(id).innerHTML = '<div class="'+cls+'">'+text+'</div>';
+}
+
+function cleanPhone(v){
+  return String(v || '').replace(/\D/g,'');
+}
+
+function cleanName(v){
+  return String(v || '').trim().replace(/\s+/g,' ').toLowerCase();
+}
+
+function parseDateSafe(v){
+  if(!v) return null;
+
+  if(typeof v === "string"){
+    let s = v.trim();
+
+    let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if(m){
+      return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
+    }
+
+    let d = new Date(s);
+    if(!isNaN(d.getTime())) return d;
+    return null;
+  }
+
+  let d = new Date(v);
+  if(!isNaN(d.getTime())) return d;
+  return null;
+}
+
+function getReminder(book){
+  const status = String(book["Status"] || "").toUpperCase();
+  if(status !== "OUT") return "";
+
+  const backendDays = Number(book["Overdue Days"] || 0);
+  const backendStatus = String(book["Overdue Status"] || "");
+
+  if(backendDays > 0){
+    return '<span class="overdue">' + backendDays + ' day(s) overdue</span>';
+  }
+
+  if(backendStatus === "DUE TODAY"){
+    return '<span class="due-today">Due today</span>';
+  }
+
+  const borrowDate = parseDateSafe(book["Borrow Time"] || book["Borrow Date"]);
+  if(!borrowDate){
+    return '<span class="due-today">Due today</span>';
+  }
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  borrowDate.setHours(0,0,0,0);
+
+  const days = Math.floor((today - borrowDate) / (1000 * 60 * 60 * 24));
+
+  if(days > 0){
+    return '<span class="overdue">' + days + ' day(s) overdue</span>';
+  }
+
+  return '<span class="due-today">Due today</span>';
+}
+
+async function startMember(){
+  const n = document.getElementById("name").value.trim();
+  const p = document.getElementById("phone").value.trim();
+
+  if(!n || !p){
+    box("startMsg","Please enter member name and handphone number.","bad");
+    return;
+  }
+
+  try{
+    const res = await fetch(API_URL + "?mode=membercheck&name=" + encodeURIComponent(n) + "&phone=" + encodeURIComponent(p));
+    const data = await res.json();
+
+    if(!data.success || !data.active){
+      box("startMsg", data.message || "Membership not active. Please approach staff.", "bad");
+      document.getElementById("main").classList.add("hidden");
+      document.getElementById("listCard").classList.add("hidden");
+      return;
+    }
+
+    user = {n:n, p:p};
+    document.getElementById("memberDisplay").innerText = n + " (" + p + ")";
+    document.getElementById("main").classList.remove("hidden");
+    document.getElementById("listCard").classList.remove("hidden");
+    box("startMsg","Membership verified. Expiry: " + (data.expiry || "-"),"ok");
+    load();
+  }catch(e){
+    box("startMsg","Connection error. Please try again.","bad");
+  }
+}
+
+async function borrow(){
+  if(!user){box("msg","Please verify your membership first.","bad");return;}
+  const b = document.getElementById("barcode").value.trim();
+  if(!b){box("msg","Please scan or enter barcode.","bad");return;}
+
+  const r = await fetch(API_URL,{method:"POST",body:JSON.stringify({action:"BORROW",barcode:b,name:user.n,phone:user.p})});
+  const d = await r.json();
+  box("msg",d.message,d.success?"ok":"bad");
+  if(d.success) document.getElementById("barcode").value="";
+  load();
+}
+
+async function returnBook(){
+  if(!user){box("msg","Please verify your membership first.","bad");return;}
+  const b = document.getElementById("barcode").value.trim();
+  if(!b){box("msg","Please scan or enter barcode.","bad");return;}
+
+  const r = await fetch(API_URL,{method:"POST",body:JSON.stringify({action:"CUSTOMER_RETURN",barcode:b,name:user.n,phone:user.p})});
+  const d = await r.json();
+  box("msg",d.message,d.success?"ok":"bad");
+  if(d.success) document.getElementById("barcode").value="";
+  load();
+}
+
+async function load(){
+  if(!user) return;
+
+  const r = await fetch(API_URL+"?mode=books");
+  const d = await r.json();
+  let list = "";
+  let count = 0;
+
+  if(!d.success || !d.books){
+    document.getElementById("list").innerHTML="<tr><td colspan='3'>Unable to load</td></tr>";
+    return;
+  }
+
+  d.books.forEach(x=>{
+    const sameName = cleanName(x["Borrower Name"]) === cleanName(user.n);
+    const samePhone = cleanPhone(x["Phone"]) === cleanPhone(user.p);
+
+    if(String(x["Status"]).toUpperCase()==="OUT" && sameName && samePhone){
+      count++;
+      list += "<tr><td>"+(x.Barcode||"")+"</td><td>"+(x.Title||"")+"</td><td>"+getReminder(x)+"</td></tr>";
+    }
+  });
+
+  document.getElementById("list").innerHTML = list || "<tr><td colspan='3'>No borrowed books</td></tr>";
+
+  const warn = document.getElementById("warningBox");
+  if(count >= 2){
+    warn.classList.remove("hidden");
+    warn.innerHTML = "⚠ You already have 2 borrowed books. Please return one book before borrowing another.";
+  }else if(count > 0){
+    warn.classList.remove("hidden");
+    warn.innerHTML = "Reminder: You currently have " + count + " borrowed book(s). Maximum allowed is 2.";
+  }else{
+    warn.classList.add("hidden");
+  }
+}
+
+new Html5Qrcode("reader").start(
+  {facingMode:"environment"},
+  {fps:10,qrbox:250},
+  txt=>{document.getElementById("barcode").value=txt;}
+).catch(err=>{box("msg","Camera cannot start. Please open using HTTPS and allow camera access.","bad");});
+</script>
+</body>
+</html>
