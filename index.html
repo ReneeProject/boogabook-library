@@ -432,6 +432,13 @@ async function startScanner() {
       return;
     }
 
+    if (scanner) {
+      try {
+        await scanner.clear();
+      } catch (e) {}
+      scanner = null;
+    }
+
     scanner = new Html5Qrcode("reader");
 
     const cameras = await Html5Qrcode.getCameras();
@@ -459,9 +466,10 @@ async function startScanner() {
           if (scanner && scannerRunning) {
             await scanner.stop();
             await scanner.clear();
-            scannerRunning = false;
           }
         } catch (e) {}
+        scannerRunning = false;
+        scanner = null;
       },
       function(err) {}
     );
@@ -478,10 +486,11 @@ async function stopScanner() {
     if (scanner && scannerRunning) {
       await scanner.stop();
       await scanner.clear();
-      scannerRunning = false;
       showBox("msg", "Scanner stopped.", true);
     }
   } catch (e) {}
+  scannerRunning = false;
+  scanner = null;
 }
 </script>
 </body>
