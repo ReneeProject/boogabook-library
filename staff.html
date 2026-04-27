@@ -191,7 +191,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 <p class="small">HP number and overdue days are shown so staff can contact borrowers who have not returned books.</p>
 <div class="table-wrap">
 <table class="table">
-<thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Date</th><th>Status</th><th>Overdue</th></tr></thead>
+<thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Date</th><th>Borrow Time</th><th>Return Time</th><th>Status</th><th>Overdue</th></tr></thead>
 <tbody id="booksBody"></tbody>
 </table>
 </div>
@@ -542,6 +542,25 @@ async function loadBooks(){
    return d.getTime() === today.getTime();
  }
 
+ function formatSGDateTime(v){
+   if(!v) return '';
+   const d = new Date(v);
+   if(isNaN(d.getTime())) return v;
+   const datePart = d.toLocaleDateString('en-GB', {
+     timeZone: 'Asia/Singapore',
+     day: '2-digit',
+     month: '2-digit',
+     year: 'numeric'
+   });
+   const timePart = d.toLocaleTimeString('en-SG', {
+     timeZone: 'Asia/Singapore',
+     hour: '2-digit',
+     minute: '2-digit',
+     hour12: true
+   }).toUpperCase();
+   return datePart + ' ' + timePart;
+ }
+
  (d.books||[]).forEach(b=>{
    const status=String(b.Status||'').toUpperCase();
    const overdueDays=Number(b["Overdue Days"]||0);
@@ -549,15 +568,17 @@ async function loadBooks(){
    const hp=b.Phone||'';
    const title=b.Title||'';
    const borrowDate=b["Borrow Date"]||'';
-   const borrowTime=b["Borrow Time"]||'';
-   const returnTime=b["Return Time"]||'';
+   const borrowTimeRaw=b["Borrow Time"]||'';
+   const returnTimeRaw=b["Return Time"]||'';
+   const borrowTime=formatSGDateTime(borrowTimeRaw);
+   const returnTime=formatSGDateTime(returnTimeRaw);
 
    // ONLY CHANGE:
    // Book Status now shows:
    // 1) Active borrowed books: Status = OUT
    // 2) Books returned today: Return Time is today
    const isActiveBorrowed = status === 'OUT';
-   const isReturnedToday = status === 'IN' && isToday(returnTime);
+   const isReturnedToday = status === 'IN' && isToday(returnTimeRaw);
 
    if(!isActiveBorrowed && !isReturnedToday) return;
 
@@ -569,16 +590,16 @@ async function loadBooks(){
    else if(isReturnedToday) overdueText='Returned today';
 
    let displayBorrowDate = borrowDate;
-   if(!displayBorrowDate && borrowTime) displayBorrowDate = borrowTime;
+   if(!displayBorrowDate && borrowTimeRaw) displayBorrowDate = formatSGDateTime(borrowTimeRaw);
 
-   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+displayBorrowDate+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+displayBorrowDate+'</td><td>'+borrowTime+'</td><td>'+returnTime+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
 
    if(isActiveBorrowed && overdueDays>0){
      overdueHtml+='<tr class="overdue-row"><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td><span class="overdue-text">'+overdueDays+' day(s)</span></td><td>'+makeContactButtons(hp, borrower, title)+'</td></tr>';
    }
  });
 
- booksBody.innerHTML=html||'<tr><td colspan="7">No active borrowed books or books returned today</td></tr>';
+ booksBody.innerHTML=html||'<tr><td colspan="9">No active borrowed books or books returned today</td></tr>';
  overdueBody.innerHTML=overdueHtml||'<tr><td colspan="6">No overdue books</td></tr>';
 }
 
