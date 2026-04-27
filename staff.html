@@ -191,7 +191,7 @@ button{border:none;background:#4CAF50;color:white;cursor:pointer}
 <p class="small">HP number and overdue days are shown so staff can contact borrowers who have not returned books.</p>
 <div class="table-wrap">
 <table class="table">
-<thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Date</th><th>Borrow Time</th><th>Return Time</th><th>Status</th><th>Overdue</th></tr></thead>
+<thead><tr><th>Barcode</th><th>Title</th><th>Borrower</th><th>HP Number</th><th>Borrow Time</th><th>Return Time</th><th>Status</th><th>Overdue</th></tr></thead>
 <tbody id="booksBody"></tbody>
 </table>
 </div>
@@ -592,14 +592,14 @@ async function loadBooks(){
    let displayBorrowDate = borrowDate;
    if(!displayBorrowDate && borrowTimeRaw) displayBorrowDate = formatSGDateTime(borrowTimeRaw);
 
-   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+displayBorrowDate+'</td><td>'+borrowTime+'</td><td>'+returnTime+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
+   html+='<tr'+rowClass+'><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td>'+borrower+'</td><td>'+hp+'</td><td>'+borrowTime+'</td><td>'+returnTime+'</td><td class="'+(status==='OUT'?'status-out':'status-in')+'">'+status+'</td><td>'+overdueText+'</td></tr>';
 
    if(isActiveBorrowed && overdueDays>0){
      overdueHtml+='<tr class="overdue-row"><td>'+borrower+'</td><td>'+hp+'</td><td>'+(b.Barcode||'')+'</td><td>'+title+'</td><td><span class="overdue-text">'+overdueDays+' day(s)</span></td><td>'+makeContactButtons(hp, borrower, title)+'</td></tr>';
    }
  });
 
- booksBody.innerHTML=html||'<tr><td colspan="9">No active borrowed books or books returned today</td></tr>';
+ booksBody.innerHTML=html||'<tr><td colspan="8">No active borrowed books or books returned today</td></tr>';
  overdueBody.innerHTML=overdueHtml||'<tr><td colspan="6">No overdue books</td></tr>';
 }
 
