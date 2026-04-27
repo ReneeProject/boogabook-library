@@ -361,7 +361,7 @@ async function markMemberActivity(){
      const returnTime = b["Return Time"] || '';
 
      const activeBorrow = status === 'OUT';
-     const returnedToday = status === 'IN' && isToday(returnTime);
+     const returnedToday = status === 'IN' && isToday(returnTimeRaw);
 
      if(!activeBorrow && !returnedToday) return;
 
